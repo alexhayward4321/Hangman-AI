@@ -1,4 +1,4 @@
-#%%
+# %%
 # -*- coding: utf-8 -*-
 """
 Created on Sun Dec 26 15:39:58 2021
@@ -37,7 +37,7 @@ class HangmanAPI(object):
 
         # Attributes included in original base solution
         self.guessed_letters = []
-        full_dictionary_location = "C:/Users/alexh/OneDrive/Documents/Coding/Python/Careers/Trexquant application/dictionaries/words_250000_train.txt"
+        full_dictionary_location = "C:\\Users\\alexh\\OneDrive\\Documents\\Coding\\Python\\Personal Projects\\Hangman\\dictionaries\\words_250000_train.txt"
         self.full_dictionary = self.build_dictionary(full_dictionary_location)
         self.full_dictionary_common_letter_sorted =\
             collections.Counter("".join(self.full_dictionary)).most_common()
@@ -45,243 +45,207 @@ class HangmanAPI(object):
 
         # ADDED ATTRIBUTES
         # For my self-made start_game function to run
-        self.tries_remains = 7
+        self.tries_remains = 7  # or 6
         self.training_dictionary, self.validation_dictionary =\
             train_test_split(self.full_dictionary, random_state=0)
 
         # Variables to prevent unnecessary and expensive repetition within guess function
-        self.first_time = True
-        self.wrong_guess = False
-        self.total_count = collections.Counter()
+        self.prev_word = ""
+        # counter object with counts of letters that appear in regex matches
+        # to the letters already correctly guessed
+        self.letter_preference = collections.Counter()
         self.whole_game_regexes = []
 
         # Reads in dataframe used to keep track of common regular expressions
-        self.regex_df_loc = "C:/Users/alexh/OneDrive/Documents/Coding/Python/Careers/Trexquant application/regexes.pkl"
-        self.regex_df = pd.read_pickle(self.regex_df_loc)
-        clean_regex_df_index = self.regex_df.index.drop_duplicates()
-        self.regex_df = self.regex_df.loc[clean_regex_df_index]
+        self.regex_df_path = "C:\\Users\\alexh\\OneDrive\\Documents\\Coding\\Python\\Personal Projects\\Hangman\\regexes.pkl"
+        self.regex_df = self.read_regex_df(self.regex_df_path)
 
         #######################
 
-    def guess(self, word, weights):
+    def guess(self, word):
         """
-        Example method works quite well until the word you need to guess doesn't exist in
-        the training dictionary and you start guessing letters from a very small set of 
-        words that fit your regular expression from the training dictionary. A better method is
-        needed that takes into account common letter combinations in the English language, but
-        so long as you have a large number of words you can take letters to guess from then the
-        example method can still be leveraged advantageously.
+        Method that takes the hangman word and returns a letter to guess
         """
-
         # clean the word so that we strip away the space characters
         # replace "_" with "." as "." indicates any character in regular expressions
         clean_word = word[::2].replace("_", ".")
 
-        # find length of passed word
-        len_word = len(clean_word)
+        previous_word = self.prev_word
+        self.prev_word = clean_word
 
-        # Calculating a check for the conditional to see if we want to use the example method
+        # Variables for conditional to select appropriate algorithm
         num_guessed_letters = len(clean_word.replace(".", ""))
-        proportion_guessed_letters = num_guessed_letters / len_word
-
-        # Another check for the conditional to see if we want to use the example method
+        proportion_guessed_letters = num_guessed_letters / len(clean_word)
         len_current_dictionary = len(self.current_dictionary)
 
-        # Use the example method under the following conditions
-        if (len_current_dictionary > weights[0] and proportion_guessed_letters < weights[1])\
-                or len_word <= 3:
+        if (len_current_dictionary < self.weights[0] and
+            proportion_guessed_letters < self.weights[1])\
+                or len(clean_word) <= 3:
 
-            # Initialize new possible words dictionary to empty
-            new_dictionary = []
+            guess_letter = self.algorithm1(clean_word)
+            return guess_letter
 
-            # iterate through all of the words in the previous plausible dictionary
-            for dict_word in self.current_dictionary:
-                # continue if the word is not of the appropriate length
-                if len(dict_word) != len_word:
-                    continue
+        else:
+            guess_letter = self.algorithm2(clean_word,
+                                           previous_word == clean_word)
+            return guess_letter
 
-                # if dictionary word is a possible match then add it to the current dictionary
-                if re.match(clean_word, dict_word):
-                    new_dictionary.append(dict_word)
+    # Baseline method provided
 
-            # overwrite old possible words dictionary with updated version
-            self.current_dictionary = new_dictionary
+    def algorithm1(self, clean_word):
 
-            # count occurrence of all characters in possible word matches
-            full_dict_string = "".join(new_dictionary)
+        new_dictionary = []
+        for dict_word in self.current_dictionary:
+            if len(dict_word) != len(clean_word):
+                continue
+            if re.match(clean_word, dict_word):
+                new_dictionary.append(dict_word)
 
-            c = collections.Counter(full_dict_string)
-            sorted_letter_count = c.most_common()
+        # overwrite old possible words dictionary with updated version
+        self.current_dictionary = new_dictionary
+        # count occurrence of all characters in possible word matches
+        c = collections.Counter("".join(new_dictionary)).most_common()
 
-            guess_letter = '!'
+        guess_letter = '!'
 
-            # return most frequently occurring letter in all possible words that hasn't been guessed yet
+        # return most frequently occurring letter in all possible words that hasn't been guessed yet
+        for letter, instance_count in sorted_letter_count:
+            if letter not in self.guessed_letters:
+                guess_letter = letter
+                break
+
+        # if no word matches in training dictionary, default back to ordering of full dictionary
+        if guess_letter == '!':
+            sorted_letter_count = self.full_dictionary_common_letter_sorted
             for letter, instance_count in sorted_letter_count:
                 if letter not in self.guessed_letters:
                     guess_letter = letter
                     break
 
-            # if no word matches in training dictionary, default back to ordering of full dictionary
-            if guess_letter == '!':
-                sorted_letter_count = self.full_dictionary_common_letter_sorted
-                for letter, instance_count in sorted_letter_count:
-                    if letter not in self.guessed_letters:
-                        guess_letter = letter
-                        break
+        return guess_letter
 
-            return guess_letter
+    def algorithm2(self, clean_word, repeat):
+        """
+        Executes a more sophisticated second algorithm as discussed in the
+        README.md. Method relies on producing all possible regular
+        expressions from correctly guessed letters, performs biased count
+        of matching words in dictionary that fill the gaps and returns
+        highest counting unguessed letter.
+        """
 
-        else:
+        # checks to see if the hangman word has changed since we last saw it, if not, we don't
+        # have to recalculate all of the regular expression matches in the dictionary
+        if not repeat:
+            # Produce a series of regular expressions based on the hangman word
+            regexes = self.produce_regexes(clean_word)
 
-            """
-                This method relies upon looking at the known letters surrounding an unknown letter, tabulating a number of regular expressions for different combinations of those letters and weighting how significantly the unguessed letters appear in each regular expression based on the different lengths of those regular expressions sizes as well as the number of other unknown letters in the environment. 
-          """
+            # Variables to add new calculated regular expressions to
+            # the pandas dataframe
+            letter_preference = collections.Counter()
 
-            # Checks if there are only three or fewer gaps remaining, in which case we
-            # won't just consider regular expressions as described above but all
-            # expressions formed surrounding unknown letters. (E.g. for word "a.lia." we
-            # consider "a.l" as a regular expression) to prevent catching unwanted letters
-            # in words that match the regular expression, we'll only guess letters that
-            # occupy the position the "." would take. This in theory would be the optimal
-            # approach anyway, given the correct weighting to regular expressions of
-            # different lengths, but it is quite computationally expensive and time
-            # consuming.
+            for expression in regexes:
+                # add regular expression to list of regular expressions for the whole game
+                self.whole_game_regexes.append(expression)
+                # Check reference dataframe to see if counter has been pre-calculated
+                if expression in self.regex_df.index:
+                    counter = self.regex_df.loc[expression,
+                                                "letter_counter"]
 
-            # and clean_word.count(".") <= 3:
-            if not self.wrong_guess or self.first_time:
-                self.first_time = False
-                """
-                    THIS COULD BE ANOTHER WEIGHTING TO EXPERIMENT WITH ^
-                    Could also consider either adding it as a permanent feature
-                    or removing it altogether to see what effect that has.
-                """
-                regexes = []
-                for i in range(len_word):
-                    for j in range(i, len_word + 1):
-                        regex = clean_word[i:j]
-                        if "." in regex:
-                            if i == 0:
-                                if j == len_word:
-                                    regexes.append("^" + clean_word[i:j] + "$")
-                                else:
-                                    regexes.append("^" + clean_word[i:j])
-                            if i > 0:
-                                if j == len_word:
-                                    regexes.append(clean_word[i:j] + "$")
-                                else:
-                                    regexes.append(clean_word[i:j])
+                # If not, calculate the counter yourself
+                else:
+                    # Find total number of letters appearing in all dictionary words
+                    # fitting a regular expression
+                    counter = self.get_counter(expression)
+                    # Update list with regular expressions to later add to the DataFrame
+                    self.new_regexes["Regex"].append(expression)
+                    self.new_regexes["letter_counter"].append(counter)
+                    self.new_regexes["counter"].append(0)
 
-                # Checks to see if a particular conditional is entered
-                entered = False
+                # Figure out the weighting to apply to the collections.Counter
+                # object for the expression based on the number of known letters in the
+                # regular expression
 
-                # Remove regular expressions that only have one letter or less
-                temp1 = [item for item in regexes if len(
-                    item.replace(".", "")) > 1]
-                # Removing potential duplicates
-                temp2 = set(temp1)
-                regexes = list(temp2)
-                breakpoint()
+                # Find weighting
+                num_letters = sum(c.isalpha() for c in expression)
+                num_letters = 6 if num_letters > 6 else num_letters
+                weighting = self.weights[num_letters + 1]
 
-                alt_total_count = collections.Counter()
-                alt_pandas_list = []
+                # Take into account weighting
+                temp_counter = collections.Counter()
+                for key, value in counter.items():
+                    temp_counter[key] = value * weighting
+                letter_preference.update(temp_counter)
 
-                for expression in regexes:
+            self.letter_preference = letter_preference.most_common()
 
-                    # Keeps track of all regular expressions that appear in our game, so that we can
-                    # later count their appearances over different words to see which ones are
-                    # most important to keep in our reference data frame
-                    self.whole_game_regexes.append(expression)
+        # Choose the guess letter with the highest count, if all letters have been guessed,
+        # use the total training dictionary distribution once more
+        guess_letter = '!'
 
-                    # Check if we already have the letter counts for a particular regex
-                    # If so, get those values, if not, then calculate them yourself
+        for letter, instance_count in self.letter_preference:
+            if letter not in self.guessed_letters:
+                guess_letter = letter
+                break
 
-                    if expression in self.regex_df.index:
-
-                        alt_counter = self.regex_df.loc[expression,
-                                                        "letter_counter"]
-
-                    else:
-
-                        entered = True
-
-                        cleaned_expression = expression.replace(
-                            "^", "").replace("$", "")
-                        # Find positions of unknown letters in the expression
-                        indexes = [i for i, ltr in enumerate(
-                            cleaned_expression) if ltr == "."]
-
-                        # All letters that correspond with "." in words which match with a
-                        # regular expression
-                        all_matching_letters = []
-
-                        for word1 in self.training_dictionary:
-
-                            # some smaller regular expressions are going to match just
-                            # everything to add tens of thousands more words to our new
-                            # dictionary doesn't really give us more information
-
-                            # Checking if the word matches the regular expression and taking
-                            # the letter values in and immediately around where the regular
-                            # expression matches
-                            re_obj = re.search(expression, word1)
-                            if re_obj:
-                                a, b = re_obj.span()
-                                matching_letters = [word1[a + idx]
-                                                    for idx in indexes]
-                                all_matching_letters.append(
-                                    "".join(matching_letters))
-
-                        LETTERS = "".join(all_matching_letters)
-                        alt_counter = collections.Counter(LETTERS)
-
-                        # Update list with regular expressions to later add to the DataFrame
-                        alt_pandas_list.append({"Regex": expression,
-                                                "letter_counter": alt_counter, "counter": 0})
-
-                    # Figure out the weighting we are going to apply to the collections.Counter
-                    # object for the expression based on the number of known letters in the
-                    # Regular expression (whether the object was looked up or calculated)
-
-                    # Find weighting
-                    num_letters = sum(c.isalpha() for c in expression)
-                    num_letters = 6 if num_letters > 6 else num_letters
-                    weighting = weights[num_letters + 1]
-
-                    # Take into account weighting
-                    temp_counter = collections.Counter()
-                    for key, value in alt_counter.items():
-                        temp_counter[key] = value * weighting
-                    alt_total_count.update(temp_counter)
-
-                    self.total_count = alt_total_count.most_common()
-
-                # Check if we saw some new regular expressions and counted up the relevant letter
-                # appearances in the dictionary, if so, add these new regular expressions to our
-                # data frame
-                if entered:
-                    df = pd.DataFrame(alt_pandas_list)
-                    df = df.set_index("Regex")
-                    self.regex_df =\
-                        pd.concat([self.regex_df, df])
-
-            # Choose the guess letter with the highest count, if all letters have been guessed,
-            # use the total training dictionary distribution once more
-
-            guess_letter = '!'
-
-            for letter, instance_count in self.total_count:
+        if guess_letter == '!':
+            sorted_letter_count = self.full_dictionary_common_letter_sorted
+            for letter, instance_count in sorted_letter_count:
                 if letter not in self.guessed_letters:
                     guess_letter = letter
                     break
+        return guess_letter
 
-            if guess_letter == '!':
-                sorted_letter_count = self.full_dictionary_common_letter_sorted
-                for letter, instance_count in sorted_letter_count:
-                    if letter not in self.guessed_letters:
-                        guess_letter = letter
-                        break
+    def produce_regexes(self, clean_word):
+        # Calculates all possible regular expressions formed surrounding unknown letters.
+        # (E.g. for word 'l e _ _ _ a ' all regular expressions would be:
+        # '^le..', '^le.', '.a$', '...a$', '..a$', '^le...a$', 'e...a$', '^le...'
+        # catching unwanted letters in words that match the regular expression,
+        len_word = len(clean_word)
+        regexes = []
+        for i in range(len_word):
+            for j in range(i, len_word + 1):
+                regex = clean_word[i:j]
+                if "." in regex:
+                    if i == 0:
+                        if j == len_word:
+                            regexes.append("^" + clean_word[i:j] + "$")
+                        else:
+                            regexes.append("^" + clean_word[i:j])
+                    if i > 0:
+                        if j == len_word:
+                            regexes.append(clean_word[i:j] + "$")
+                        else:
+                            regexes.append(clean_word[i:j])
 
-            return guess_letter
+        # Remove regular expressions that only have one letter or less (they're not useful)
+        regexes = [item for item in regexes if len(item.replace(".", "")) > 1]
+        # Removing potential duplicates
+        regexes = list(set(regexes))
+        return regexes
+
+    # Returns collections.Counter object for total number of letters appearing in all
+    # dictionary words fitting a regular expression. Only guesses letters that occupy
+    # the position the "." would take.
+
+    def get_counter(self, expression):
+
+        # Find positions of unknown letters in the expression
+        cleaned_expression = expression.replace("^", "").replace("$", "")
+        indexes = [i for i, ltr in enumerate(cleaned_expression) if ltr == "."]
+
+        # Checking if the word matches the regular expression and taking
+        # the letter values in and immediately around where the regular
+        # expression matches
+        all_matching_letters = []
+        for dict_word in self.full_dictionary:
+            re_obj = re.search(expression, dict_word)
+            if re_obj:
+                a, b = re_obj.span()
+                matching_letters = [dict_word[a + idx] for idx in indexes]
+                all_matching_letters.append("".join(matching_letters))
+
+        LETTERS = "".join(all_matching_letters)
+        return collections.Counter(LETTERS)
 
     ##########################################################
     # You'll likely not need to modify any of the code below #
@@ -293,17 +257,27 @@ class HangmanAPI(object):
         text_file.close()
         return full_dictionary
 
+    def read_regex_df(self, regex_df_path):
+        regex_df = pd.read_pickle(regex_df_path)
+        clean_regex_df_index = regex_df.index.drop_duplicates()
+        regex_df = regex_df.loc[clean_regex_df_index]
+        return regex_df
+
     def start_game(self, weights, verbose=True, practice=1):
 
         # reset guessed letters to empty set and current plausible dictionary to the full dictionary
         self.guessed_letters = []
 
         # I added this bit
-        self.first_time = True
         self.current_dictionary = self.training_dictionary
 
         self.tries_remains = 7
         self.whole_game_regexes = []
+        self.weights = weights
+
+        # Dictionary of newly encountered regex to store for future speed
+        self.new_regexes = {"Regex": [],
+                            "letter_counter": [], "counter": []}
 
         # Chooses a word from the validation dictionary and creates a hangman equivalent
         # to show the user
@@ -316,7 +290,7 @@ class HangmanAPI(object):
 
         while self.tries_remains > 0:
             # get guessed letter from guess method
-            guess_letter = self.guess(hangman_word, weights)
+            guess_letter = self.guess(hangman_word)
 
             # append guessed letter to guessed letters field in hangman object
             self.guessed_letters.append(guess_letter)
@@ -371,7 +345,7 @@ class HangmanAPI(object):
                                           "counter"] = self.regex_df.loc[regex, "counter"] + 1
 
                 # Write DataFrame of all known pickles to external file for safekeeping
-                self.regex_df.to_pickle(self.regex_df_loc)
+                self.regex_df.to_pickle(self.regex_df_path)
 
                 return game_return_val
 
@@ -381,7 +355,6 @@ class HangmanAPI(object):
 # =============================================================================
 #     Below are newly defined functions created in order to try and find the optimal weights for the above guess method
 # =============================================================================
-
 
     def cost_function(self, weights):
         """
@@ -500,7 +473,7 @@ final_weights = api.gradient_descent(0.3)
 
 #     df = pd.DataFrame(columns=["Regex", "letter_counter", "counter"])
 #     df = df.set_index("Regex")
-#     df.to_pickle("C:/Users/alexh/OneDrive/Documents/Coding/Python/Careers/Trexquant/regexes.pkl")
+#     df.to_pickle("C:/Users/alexh/OneDrive/Documents/Coding/Python/Personal Projects/Hangman/regexes.pkl")
 
 # reset_DataFrames()
 
@@ -509,7 +482,7 @@ final_weights = api.gradient_descent(0.3)
 # So I can check the regular expression file
 
 
-with open("C:/Users/alexh/OneDrive/Documents/Coding/Python/Careers/Trexquant/regexes.pkl", 'rb') as pickle_file:
+with open("C:/Users/alexh/OneDrive/Documents/Coding/Python/Personal Projects/Hangman/regexes.pkl", 'rb') as pickle_file:
     content = pickle.load(pickle_file)
 
 
@@ -535,11 +508,9 @@ def print_time():
     print("Time =", current_time)
 
 
-
-#%%
-
+# %%
 print(api.cost_function([500, 3, 1, 2, 4, 8, 16, 32]))
 
-#%%
+# %%
 
 final_weights = api.gradient_descent(0.3)
