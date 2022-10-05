@@ -7,6 +7,7 @@ Created on Sun Dec 26 15:39:58 2021
 """
 
 import pickle
+from importlib import reload
 import json
 import re
 import requests
@@ -27,7 +28,9 @@ except ImportError:
 # I added this bit
 
 from sklearn.model_selection import train_test_split
-from AI import HangmanAI
+import AI as ai
+reload(ai)
+
 
 
 class HangmanGameAPI(object):
@@ -57,7 +60,8 @@ class HangmanGameAPI(object):
         text_file.close()
         return full_dictionary
 
-    def start_game(self, verbose=True, practice=1, AI=False, test=False):
+    def start_game(self, verbose=True, practice=1, AI=False, test=False,
+                   regex_store=False):
 
         # reset guessed letters to empty set and current plausible dictionary to the full dictionary
         self.guessed_letters = []
@@ -119,11 +123,12 @@ class HangmanGameAPI(object):
                               f"The word you needed to guess: {word}")))
         else:
 
-            AI = HangmanAI(self.training_dictionary)
+            AI = ai.HangmanAI(self.training_dictionary, regex_store=regex_store)
 
             while self.tries_remains > 0:
                 # get guessed letter from guess method
-                guess_letter = AI.guess(hangman_word, self.guessed_letters)
+                guess_letter = AI.guess(
+                    hangman_word, self.guessed_letters)
 
                 # append guessed letter to guessed letters field in hangman object
                 self.guessed_letters.append(guess_letter)
@@ -148,15 +153,17 @@ class HangmanGameAPI(object):
                     if verbose:
                         print(f"Incorrect guess! Updated word: {hangman_word}\
                             # tries remaining: {self.tries_remains}")
-                
+
                 if self.tries_remains >= 0 and "_" not in hangman_word:
                     if verbose:
                         print("Successfully finished game!")
+                        break
                 elif self.tries_remains == 0:
                     if verbose:
                         print('\n'.join(("Failed game. You ran out of lives.",
                               f"The word you needed to guess: {word}")))
-                   
+
+            AI.conclude()
 
         return None
 
@@ -164,6 +171,6 @@ class HangmanGameAPI(object):
 
 
 game = HangmanGameAPI()
-game.start_game(test=True, AI=True)
+game.start_game(test=True, AI=True, regex_store=True)
 
 # %%

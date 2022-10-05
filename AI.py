@@ -33,21 +33,24 @@ from sklearn.model_selection import train_test_split
 # %%
 
 class HangmanAI(object):
-    def __init__(self, training_dict, weights=[500, 0.35, 1, 2, 4, 8, 12, 20]):
+    def __init__(self, training_dict, weights=[500, 0.35, 1, 2, 4, 8, 12, 20], regex_store=False):
 
         self.full_dictionary = training_dict
+        self.full_dictionary_common_letter_sorted = collections.Counter(
+            "".join(self.full_dictionary)).most_common()
         self.current_dictionary = training_dict
         self.weights = weights
         self.letter_preference = collections.Counter()
         self.prev_word = ""
         self.guessed_letters = []
 
-        # Dataframe regex store functionality
-        self.regex_df_path = "C:\\Users\\alexh\\OneDrive\\Documents\\Coding\\Python\\Personal Projects\\Hangman\\regexes.pkl"
-        self.regex_df = self.read_regex_df(self.regex_df_path)
-        self.new_regexes = {"Regex": [],
-                            "letter_counter": [], "counter": []}
-        self.whole_game_regexes = []
+        # Dataframe regex store functionality (an experiment for speed)
+        if regex_store:
+            self.regex_store = True
+            self.regex_df_path = "C:\\Users\\alexh\\OneDrive\\Documents\\Coding\\Python\\Personal Projects\\Hangman\\regexes.pkl"
+            self.regex_df = self.read_regex_df(self.regex_df_path)
+            self.new_regexes = {"Regex": [],
+                                "letter_counter": [], "counter": []}
 
     def guess(self, word, guessed_letters):
         """
@@ -75,7 +78,7 @@ class HangmanAI(object):
 
         return guess_letter
 
-    # Baseline method provided
+    # Baseline method
 
     def algorithm1(self, clean_word):
 
@@ -111,14 +114,13 @@ class HangmanAI(object):
         if not repeat:
             # Produce a series of regular expressions based on the hangman word
             regexes = self.produce_regexes(clean_word)
+
             # counter object which tabulates letters with strongest matches
             letter_preference = collections.Counter()
 
             for expression in regexes:
-                # add regular expression to list of regular expressions for the whole game
-                self.whole_game_regexes.append(expression)
                 # Check reference dataframe to see if counter has been pre-calculated
-                if expression in self.regex_df.index:
+                if self.regex_store and expression in self.regex_df.index:
                     counter = self.regex_df.loc[expression,
                                                 "letter_counter"]
                 # If not, calculate the counter yourself
@@ -126,10 +128,12 @@ class HangmanAI(object):
                     # Find total number of letters appearing in all dictionary words
                     # fitting a regular expression
                     counter = self.get_counter(expression)
-                    # Update list with regular expressions to later add to the DataFrame
-                    self.new_regexes["Regex"].append(expression)
-                    self.new_regexes["letter_counter"].append(counter)
-                    self.new_regexes["counter"].append(0)
+
+                    if self.regex_store:
+                        # Update list with regular expressions to later add to the DataFrame
+                        self.new_regexes["Regex"].append(expression)
+                        self.new_regexes["letter_counter"].append(counter)
+                        self.new_regexes["counter"].append(0)
 
                 # Find weighting for letter counters
                 num_letters = sum(c.isalpha() for c in expression)
@@ -222,30 +226,39 @@ class HangmanAI(object):
 
         return guess_letter
 
-    def build_dictionary(self, dictionary_file_location):
-        text_file = open(dictionary_file_location, "r")
-        full_dictionary = text_file.read().splitlines()
-        text_file.close()
-        return full_dictionary
-
     def read_regex_df(self, regex_df_path):
         regex_df = pd.read_pickle(regex_df_path)
         clean_regex_df_index = regex_df.index.drop_duplicates()
         regex_df = regex_df.loc[clean_regex_df_index]
         return regex_df
 
+    # So I can check the regular expression file
+    def check_regex(self):
+        with open("C:/Users/alexh/OneDrive/Documents/Coding/Python/Personal Projects/Hangman/regexes.pkl", 'rb') as pickle_file:
+            content = pickle.load(pickle_file)
+        return content
+
     def conclude(self):
+        # If this looks contrived, it's because I'm trying to avoid successively appending rows to a big datafrmae
+        if self.regex_store:
+            new_regex_df = pd.DataFrame(self.new_regexes)
+            new_regex_df = new_regex_df.set_index("Regex")
+            new_regex_df = new_regex_df[~new_regex_df.index.duplicated(
+                keep='first')]
+            actual_new_regex_df = pd.DataFrame(
+                columns=new_regex_df.columns, )
+            for regex in new_regex_df.index:
+                if regex in self.regex_df.index:
+                    self.regex_df.loc[regex,
+                                      "counter"] += 1
+                else:
+                    actual_new_regex_df = pd.concat(
+                        [actual_new_regex_df, new_regex_df.loc[[regex]]])
 
-        duplicates_removed = set(self.whole_game_regexes)
-        for regex in duplicates_removed:
-            if self.regex_df.loc[regex, "counter"] == 0:
-                self.regex_df.loc[regex, "counter"] = 1
-            else:
-                self.regex_df.loc[regex,
-                                  "counter"] = self.regex_df.loc[regex, "counter"] + 1
-
-        # Write DataFrame of all known pickles to external file for safekeeping
-        self.regex_df.to_pickle(self.regex_df_path)
+            self.regex_df = pd.concat([self.regex_df, actual_new_regex_df])
+            self.regex_df = self.regex_df.rename_axis("Regex")
+            # Write DataFrame of all known pickles to external file for safekeeping
+            self.regex_df.to_pickle(self.regex_df_path)
 
         return None
 
@@ -337,6 +350,8 @@ class HangmanAI(object):
             print(weights, ": ", cost)
         return cost_to_weights
 
+# Utility functions for testing
+
 
 def reset_DataFrames():
 
@@ -346,16 +361,16 @@ def reset_DataFrames():
         "C:/Users/alexh/OneDrive/Documents/Coding/Python/Personal Projects/Hangman/regexes.pkl")
 
 
-# %%
-
-# So I can check the regular expression file
-def check_regex():
-    with open("C:/Users/alexh/OneDrive/Documents/Coding/Python/Personal Projects/Hangman/regexes.pkl", 'rb') as pickle_file:
-        content = pickle.load(pickle_file)
-    return content
-
-
 def print_time():
     now = datetime.now()
     current_time = now.strftime("%H:%M:%S")
     print("Time =", current_time)
+
+
+if __name__ == "__main__":
+    from sklearn.model_selection import train_test_split
+    AI = HangmanAI(["word"])
+    df = AI.check_regex()
+
+
+# %%
