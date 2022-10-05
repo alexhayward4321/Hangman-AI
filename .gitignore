@@ -2,3 +2,5 @@
 .ipynb_checkpoints
 archive
 test.py
+__pycache__
+

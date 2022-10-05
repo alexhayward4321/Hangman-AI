@@ -27,19 +27,16 @@ except ImportError:
 # I added this bit
 
 from sklearn.model_selection import train_test_split
+from AI import HangmanAI
 
 
 class HangmanGameAPI(object):
     def __init__(self):
 
-        # Attributes included in original base solution
         self.guessed_letters = []
         full_dictionary_location = "C:\\Users\\alexh\\OneDrive\\Documents\\Coding\\Python\\Personal Projects\\Hangman\\dictionaries\\words_250000_train.txt"
         self.full_dictionary = self.build_dictionary(full_dictionary_location)
-        # ADDED ATTRIBUTES
-        # For my self-made start_game function to run
         self.tries_remains = 7  # or 6
-        #######################
 
     def human_guess(self):
         letter = input("Please enter the letter you would like to guess: ")
@@ -121,9 +118,12 @@ class HangmanGameAPI(object):
                         print('\n'.join(("Failed game. You ran out of lives.",
                               f"The word you needed to guess: {word}")))
         else:
+
+            AI = HangmanAI(self.training_dictionary)
+
             while self.tries_remains > 0:
                 # get guessed letter from guess method
-                guess_letter = self.guess(hangman_word)
+                guess_letter = AI.guess(hangman_word, self.guessed_letters)
 
                 # append guessed letter to guessed letters field in hangman object
                 self.guessed_letters.append(guess_letter)
@@ -148,32 +148,15 @@ class HangmanGameAPI(object):
                     if verbose:
                         print(f"Incorrect guess! Updated word: {hangman_word}\
                             # tries remaining: {self.tries_remains}")
-
-                game_end = False
+                
                 if self.tries_remains >= 0 and "_" not in hangman_word:
                     if verbose:
                         print("Successfully finished game!")
-
-                    game_end = True
                 elif self.tries_remains == 0:
                     if verbose:
                         print('\n'.join(("Failed game. You ran out of lives.",
                               f"The word you needed to guess: {word}")))
-                    game_end = True
-                if game_end:
-                    # Update counts of appearances of regular expressions
-
-                    # Removing duplicates
-                    duplicates_removed = set(self.whole_game_regexes)
-                    for regex in duplicates_removed:
-                        if self.regex_df.loc[regex, "counter"] == 0:
-                            self.regex_df.loc[regex, "counter"] = 1
-                        else:
-                            self.regex_df.loc[regex,
-                                              "counter"] = self.regex_df.loc[regex, "counter"] + 1
-
-                    # Write DataFrame of all known pickles to external file for safekeeping
-                    self.regex_df.to_pickle(self.regex_df_path)
+                   
 
         return None
 
@@ -181,6 +164,6 @@ class HangmanGameAPI(object):
 
 
 game = HangmanGameAPI()
-game.start_game(test=True)
+game.start_game(test=True, AI=True)
 
 # %%

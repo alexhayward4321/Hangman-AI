@@ -11,3 +11,5 @@ Ideas
   initial separation)
 - Start separation by literally separating all of the AI and the gaming
   part
+- Might want to think about how you want to do reinitialisation before
+the start of a new game

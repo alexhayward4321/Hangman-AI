@@ -32,48 +32,35 @@ from sklearn.model_selection import train_test_split
 
 # %%
 
-class HangmanAPI(object):
-    def __init__(self):
+class HangmanAI(object):
+    def __init__(self, training_dict, weights=[500, 0.35, 1, 2, 4, 8, 12, 20]):
 
-        # Attributes included in original base solution
-        self.guessed_letters = []
-        full_dictionary_location = "C:\\Users\\alexh\\OneDrive\\Documents\\Coding\\Python\\Personal Projects\\Hangman\\dictionaries\\words_250000_train.txt"
-        self.full_dictionary = self.build_dictionary(full_dictionary_location)
-        self.full_dictionary_common_letter_sorted =\
-            collections.Counter("".join(self.full_dictionary)).most_common()
-        self.current_dictionary = []
-
-        # ADDED ATTRIBUTES
-        # For my self-made start_game function to run
-        self.tries_remains = 7  # or 6
-        self.training_dictionary, self.validation_dictionary =\
-            train_test_split(self.full_dictionary, random_state=0)
-
-        # Variables to prevent unnecessary and expensive repetition within guess function
-        self.prev_word = ""
-        # counter object with counts of letters that appear in regex matches
-        # to the letters already correctly guessed
+        self.full_dictionary = training_dict
+        self.current_dictionary = training_dict
+        self.weights = weights
         self.letter_preference = collections.Counter()
-        self.whole_game_regexes = []
+        self.prev_word = ""
+        self.guessed_letters = []
 
-        # Reads in dataframe used to keep track of common regular expressions
+        # Dataframe regex store functionality
         self.regex_df_path = "C:\\Users\\alexh\\OneDrive\\Documents\\Coding\\Python\\Personal Projects\\Hangman\\regexes.pkl"
         self.regex_df = self.read_regex_df(self.regex_df_path)
+        self.new_regexes = {"Regex": [],
+                            "letter_counter": [], "counter": []}
+        self.whole_game_regexes = []
 
-        #######################
-
-    def guess(self, word):
+    def guess(self, word, guessed_letters):
         """
         Method that takes the hangman word and returns a letter to guess
         """
+        self.guessed_letters = guessed_letters
         # clean the word so that we strip away the space characters
-        # replace "_" with "." as "." indicates any character in regular expressions
         clean_word = word[::2].replace("_", ".")
-
+        # Checking if word hasn't changed, in case no new computation needed
         previous_word = self.prev_word
         self.prev_word = clean_word
 
-        # Variables for conditional to select appropriate algorithm
+        # Variables for conditional to select best guessing algorithm
         num_guessed_letters = len(clean_word.replace(".", ""))
         proportion_guessed_letters = num_guessed_letters / len(clean_word)
         len_current_dictionary = len(self.current_dictionary)
@@ -81,14 +68,12 @@ class HangmanAPI(object):
         if (len_current_dictionary < self.weights[0] and
             proportion_guessed_letters < self.weights[1])\
                 or len(clean_word) <= 3:
-
             guess_letter = self.algorithm1(clean_word)
-            return guess_letter
-
         else:
             guess_letter = self.algorithm2(clean_word,
                                            previous_word == clean_word)
-            return guess_letter
+
+        return guess_letter
 
     # Baseline method provided
 
@@ -126,7 +111,6 @@ class HangmanAPI(object):
         if not repeat:
             # Produce a series of regular expressions based on the hangman word
             regexes = self.produce_regexes(clean_word)
-
             # counter object which tabulates letters with strongest matches
             letter_preference = collections.Counter()
 
@@ -137,7 +121,6 @@ class HangmanAPI(object):
                 if expression in self.regex_df.index:
                     counter = self.regex_df.loc[expression,
                                                 "letter_counter"]
-
                 # If not, calculate the counter yourself
                 else:
                     # Find total number of letters appearing in all dictionary words
@@ -148,11 +131,7 @@ class HangmanAPI(object):
                     self.new_regexes["letter_counter"].append(counter)
                     self.new_regexes["counter"].append(0)
 
-                # Figure out the weighting to apply to the collections.Counter
-                # object for the expression based on the number of known letters in the
-                # regular expression
-
-                # Find weighting
+                # Find weighting for letter counters
                 num_letters = sum(c.isalpha() for c in expression)
                 num_letters = 6 if num_letters > 6 else num_letters
                 weighting = self.weights[num_letters + 1]
@@ -243,10 +222,6 @@ class HangmanAPI(object):
 
         return guess_letter
 
-    ##########################################################
-    # You'll likely not need to modify any of the code below #
-    ##########################################################
-
     def build_dictionary(self, dictionary_file_location):
         text_file = open(dictionary_file_location, "r")
         full_dictionary = text_file.read().splitlines()
@@ -259,91 +234,18 @@ class HangmanAPI(object):
         regex_df = regex_df.loc[clean_regex_df_index]
         return regex_df
 
-    def start_game(self, weights, verbose=True, practice=1):
+    def conclude(self):
 
-        # reset guessed letters to empty set and current plausible dictionary to the full dictionary
-        self.guessed_letters = []
-
-        # I added this bit
-        self.current_dictionary = self.training_dictionary
-
-        self.tries_remains = 7
-        self.whole_game_regexes = []
-        self.weights = weights
-
-        # Dictionary of newly encountered regex to store for future speed
-        self.new_regexes = {"Regex": [],
-                            "letter_counter": [], "counter": []}
-
-        # Chooses a word from the validation dictionary and creates a hangman equivalent
-        # to show the user
-        word = random.choice(self.validation_dictionary)
-        hangman_word = "_ " * len(word)
-
-        if verbose:
-            print("Successfully start a new game! # of tries remaining: {0}.\
-                  Word: {1}.".format(self.tries_remains, word))
-
-        while self.tries_remains > 0:
-            # get guessed letter from guess method
-            guess_letter = self.guess(hangman_word)
-
-            # append guessed letter to guessed letters field in hangman object
-            self.guessed_letters.append(guess_letter)
-
-            if verbose:
-                print("Guessing letter: {0}".format(guess_letter))
-
-            # Check if your guessed letter is in the word, if not then decrement tries remaining
-            if guess_letter in word:
-                indexes = [i for i, ltr in enumerate(
-                    word) if ltr == guess_letter]
-                hangman_word_list = list(hangman_word)
-                for idx in indexes:
-                    hangman_word_list[idx * 2] = guess_letter
-                hangman_word = "".join(hangman_word_list)
-                if verbose:
-                    print(f"Correct guess!   Updated word: {hangman_word}\
-                          # tries remaining: {self.tries_remains}")
-
-                self.wrong_guess = False
-
+        duplicates_removed = set(self.whole_game_regexes)
+        for regex in duplicates_removed:
+            if self.regex_df.loc[regex, "counter"] == 0:
+                self.regex_df.loc[regex, "counter"] = 1
             else:
-                self.tries_remains -= 1
-                self.wrong_guess = True
-                if verbose:
-                    print(f"Incorrect guess! Updated word: {hangman_word}\
-                          # tries remaining: {self.tries_remains}")
+                self.regex_df.loc[regex,
+                                  "counter"] = self.regex_df.loc[regex, "counter"] + 1
 
-            game_end = False
-            if self.tries_remains >= 0 and "_" not in hangman_word:
-                if verbose:
-                    print("Successfully finished game!")
-
-                game_end = True
-                game_return_val = True
-            elif self.tries_remains == 0:
-                if verbose:
-                    print(
-                        f"Failed game. You ran out of lives. \n The word you had to guess: {word}")
-                game_end = True
-                game_return_val = False
-            if game_end:
-                # Update counts of appearances of regular expressions
-
-                # Removing duplicates
-                duplicates_removed = set(self.whole_game_regexes)
-                for regex in duplicates_removed:
-                    if self.regex_df.loc[regex, "counter"] == 0:
-                        self.regex_df.loc[regex, "counter"] = 1
-                    else:
-                        self.regex_df.loc[regex,
-                                          "counter"] = self.regex_df.loc[regex, "counter"] + 1
-
-                # Write DataFrame of all known pickles to external file for safekeeping
-                self.regex_df.to_pickle(self.regex_df_path)
-
-                return game_return_val
+        # Write DataFrame of all known pickles to external file for safekeeping
+        self.regex_df.to_pickle(self.regex_df_path)
 
         return None
 
@@ -351,6 +253,7 @@ class HangmanAPI(object):
 # =============================================================================
 #     Below are newly defined functions created in order to try and find the optimal weights for the above guess method
 # =============================================================================
+
 
     def cost_function(self, weights):
         """
@@ -435,78 +338,24 @@ class HangmanAPI(object):
         return cost_to_weights
 
 
-# %%
-api = HangmanAPI()
+def reset_DataFrames():
 
-# %%
+    df = pd.DataFrame(columns=["Regex", "letter_counter", "counter"])
+    df = df.set_index("Regex")
+    df.to_pickle(
+        "C:/Users/alexh/OneDrive/Documents/Coding/Python/Personal Projects/Hangman/regexes.pkl")
 
-api.start_game([500, 0.35, 1, 2, 4, 8, 12, 20])
-
-# %%
-
-print_time()
-
-print(api.cost_function([50, 0.3, 1, 2, 4, 8, 12, 20]))
-
-print_time()
-
-# %%
-
-
-final_weights = api.gradient_descent(0.3)
-
-# I used 0.1 initially, then thought that would take a really, REALLY long time, then I switched it to 0.5 just so I could get a relatively quick answer so I could see if it what I had written would actually work. Then I moved to 0.3, that's actually a reasonable number because 1-0.3 = 0.7 and 1+0.3 = 1.3 and 0.7/1.3 ~ 1/2
-
-# final weights of first attempt [5333, 1694, 6156, 2324, 2424, 4986, 3315, 4017]
-
-#
-
-# %%
-
-""" used during debugging to reset the dataframe storing the regular expressions"""
-
-# def reset_DataFrames():
-
-#     df = pd.DataFrame(columns=["Regex", "letter_counter", "counter"])
-#     df = df.set_index("Regex")
-#     df.to_pickle("C:/Users/alexh/OneDrive/Documents/Coding/Python/Personal Projects/Hangman/regexes.pkl")
-
-# reset_DataFrames()
 
 # %%
 
 # So I can check the regular expression file
-
-
-with open("C:/Users/alexh/OneDrive/Documents/Coding/Python/Personal Projects/Hangman/regexes.pkl", 'rb') as pickle_file:
-    content = pickle.load(pickle_file)
-
-
-# %%
-
-"""
-    Under this weighting: [50, 0.3, 1, 2, 4, 8, 12, 20]
-    the cost function with 100 repeats gave the following accuracies:
-        [0.42, 0.5, 0.43, 0.49]
-    Even with 100 repeats there is still huge variation within the calculated accuracy, making my gradient descent function very flawed, unfortunately
-
-
-
-
-"""
-
-# %%
+def check_regex():
+    with open("C:/Users/alexh/OneDrive/Documents/Coding/Python/Personal Projects/Hangman/regexes.pkl", 'rb') as pickle_file:
+        content = pickle.load(pickle_file)
+    return content
 
 
 def print_time():
     now = datetime.now()
     current_time = now.strftime("%H:%M:%S")
     print("Time =", current_time)
-
-
-# %%
-print(api.cost_function([500, 3, 1, 2, 4, 8, 16, 32]))
-
-# %%
-
-final_weights = api.gradient_descent(0.3)

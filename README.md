@@ -1,4 +1,7 @@
 
+README FILE UNDER REVIEW - WILL BE CHANGED SOON
+
+
 ## The Game
 
 In the game of Hangman, a secret word is selected at random from a list. The game API then returns row of underscores (space separated)—one for each letter in the secret word—and asks the user to guess a letter. If the user guesses a letter that is in the word, the word is redisplayed with all instances of that letter shown in the correct positions, along with any letters correctly guessed on previous turns. If the letter does not appear in the word, the user is charged with an incorrect guess. The user keeps guessing letters until either (1) the user has correctly guessed all the letters in the word
