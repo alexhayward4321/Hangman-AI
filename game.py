@@ -32,8 +32,11 @@ import AI as ai
 reload(ai)
 
 
-
 class HangmanGameAPI(object):
+    """
+    A hangman game object that can be played either by a human or an AI
+    """
+
     def __init__(self):
 
         self.guessed_letters = []
@@ -61,7 +64,7 @@ class HangmanGameAPI(object):
         return full_dictionary
 
     def start_game(self, verbose=True, practice=1, AI=False, test=False,
-                   regex_store=False):
+                   regex_store=False, max_word_length=100, my_word=False):
 
         # reset guessed letters to empty set and current plausible dictionary to the full dictionary
         self.guessed_letters = []
@@ -69,15 +72,29 @@ class HangmanGameAPI(object):
 
         # Chooses a word from the validation dictionary and creates a hangman equivalent
         # to show the user
+        word = 'a' * 101
+        if max_word_length > 100:
+            max_word_length = 100
+
         if AI:
             self.training_dictionary, self.validation_dictionary =\
                 train_test_split(self.full_dictionary, random_state=0)
-            word = random.choice(self.validation_dictionary)
-        else:
-            word = random.choice(self.full_dictionary)
+
+        while len(word) > max_word_length:
+            if my_word:
+                word = input(
+                    "Player, specify the word you wish your adversary to guess: ")
+                if len(word) > max_word_length:
+                    print(
+                        f"Word is longer than max word length of {max_word_length} characters specified")
+            else:
+                if AI:
+                    word = random.choice(self.validation_dictionary)
+                else:
+                    word = random.choice(self.full_dictionary)
         hangman_word = "_ " * len(word)
 
-        if test:
+        if AI and test:
             print(f"This is the word you want to guess: {word}")
 
         if verbose:
@@ -117,13 +134,15 @@ class HangmanGameAPI(object):
                 if self.tries_remains >= 0 and "_" not in hangman_word:
                     if verbose:
                         print("Successfully finished game!")
+                        break
                 elif self.tries_remains == 0:
                     if verbose:
                         print('\n'.join(("Failed game. You ran out of lives.",
                               f"The word you needed to guess: {word}")))
         else:
 
-            AI = ai.HangmanAI(self.training_dictionary, regex_store=regex_store)
+            AI = ai.HangmanAI(self.training_dictionary,
+                              regex_store=regex_store)
 
             while self.tries_remains > 0:
                 # get guessed letter from guess method
@@ -167,10 +186,9 @@ class HangmanGameAPI(object):
 
         return None
 
-# %%
-
-
-game = HangmanGameAPI()
-game.start_game(test=True, AI=True, regex_store=True)
+if __name__ == "__main__":
+    game = HangmanGameAPI()
+    game.start_game(test=True, my_word=True, AI=True,
+                    regex_store=True)
 
 # %%

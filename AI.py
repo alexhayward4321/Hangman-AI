@@ -33,6 +33,11 @@ from sklearn.model_selection import train_test_split
 # %%
 
 class HangmanAI(object):
+    """
+    An AI that guesses words based on the state of the hangman game and 
+    common letter patterns found in Eglish words found using a training
+    dictionary.
+    """
     def __init__(self, training_dict, weights=[500, 0.35, 1, 2, 4, 8, 12, 20], regex_store=False):
 
         self.full_dictionary = training_dict
@@ -78,7 +83,7 @@ class HangmanAI(object):
 
         return guess_letter
 
-    # Baseline method
+    # Basic method
 
     def algorithm1(self, clean_word):
 

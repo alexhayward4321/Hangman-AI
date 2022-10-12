@@ -1,49 +1,102 @@
 
-README FILE UNDER REVIEW - WILL BE CHANGED SOON
+# Hangman AI
 
 
-## The Game
+## Purpose 
 
-In the game of Hangman, a secret word is selected at random from a list. The game API then returns row of underscores (space separated)—one for each letter in the secret word—and asks the user to guess a letter. If the user guesses a letter that is in the word, the word is redisplayed with all instances of that letter shown in the correct positions, along with any letters correctly guessed on previous turns. If the letter does not appear in the word, the user is charged with an incorrect guess. The user keeps guessing letters until either (1) the user has correctly guessed all the letters in the word
-or (2) the user has made a specified number of incorrect guesses (in this case, 6).
+The primary purpose of this project was to design an AI algorithm to play the game of hangman for you, far better than a human ever could. 
 
-## Introduction
+## The Traditional Game
 
-In this scenario I have split a dictionary of words into a training set and a test set. 
+The traditional game of hangman is played with two or more players. One person thinks of a word for the other player(s) to try to guess and writes down a number of underscores on a page, whiteboard or other writing surface indicating the number of letters in the word. The other player(s) successively guess(es) letters they suspect make up the word. There are a limited number of times they can incorrectly guess a letter before the game is over and the player who came up with the word wins.
 
-within the solution I have devised for the game, several different strategies have been employed which interact or are preferentially chosen depending on the state of the game. 
+In the traditional game, towards the start when there is little to no information due to their being few or no letters making up the word, guesses typically come from common letters that appear in the English language. As the game progresses and more letters are guessed, the new letters are guessed based on player's impressions of what words would fit the pattern indicated by the letters already guessed correctly or what letters would commonly go with subsets of the guessed letters.
+
+The game is called hangman because to symbolise the number of guesses decreasing, the person who came up with the word incrementally draws the parts that form a gallows and a person about to be hung from it. In retrospect, this is quite morbid for a children's game.
+
+## Play the game yourself
+
+Despite the primary purpose of the game being the design of an AI, a human - playable version of the game has also been implemented. At the moment it lacks a nice interface, but if you run the game.py file and modify the .start_game() method at the bottom with the following parameters:
+```
+game.start_game(my_word=True)
+```
+you can play the traditional human adversarial version of the game as explained above. If you don't want to play with anyone else, you can also run that method without any parameters and have a random word generated for you to guess. If you want to have the AI guess a word of your design, you can pass AI=True as a parameter.
+
+
+## The AI solution
+
+Several different strategies have been explored, some of which have been later combined to create the AI solution, which interact or are preferentially chosen depending on the state of the game. 
 
 The most basic is to simply count how many times each letter appears in the training dictionary of words, and pick letters in order of which letter appears most frequently. Extremely simple, and not that accurate, it has an accuracy of x%. The most basic adjustment to that would be to match the words that you count in the dictionary in length to the secret word and then count which letters appear most frequently. 
 
-A more sophisticated algorithm will match the provided masked string (e.g. a _ _ l e) to all possible words in the dictionary, tabulate the frequency of letters appearing in these possible words, and then guess the letter with the highest frequency of appearence that has not already been guessed. If there are no remaining words that match then it will default back to the character frequency distribution of the entire dictionary. This strategy is successful approximately 18% of the time. This benchmark strategy was the inspiration I received to start the rest of this project. We can do better.
+A more sophisticated algorithm will match the provided masked string (e.g. a _ _ l e) to all possible words in the dictionary, tabulate the frequency of letters appearing in these possible words, and then guess the letter with the highest frequency of appearence that has not already been guessed. If there are no remaining words that match then it will default back to the character frequency distribution of the entire dictionary. This is the algorithm implemented in the `AI.algorithm1()` method. This strategy is successful approximately 18% of the time. This benchmark strategy was the inspiration I received to start the rest of this project. We can do better. 
+
 
 
 ## My Strategy:
 
-   The benchmark method works quite well until the word you need to guess doesn't exist in the training dictionary and you start guessing letters from an increasingly small set of words that fit your regular expression from that dictionary but bear no relation to the word you are trying to guess. A better method is needed that takes into account common letter combinations in the English language. However, so long as you have a large number of words that match the length and regular expression of the unknown word and there are still many unknown letters then the example method can still be leveraged advantageously over the two alternative methods of taking letters from the letter distribution of the full dictionary and the method that takes into account common letter combinations.
-    
-   The method that takes into account common letter combinations first looks at the letters in the unknown word, and produces all possible unique regular expressions that can be made with that word using the known letters in the word (more details line 126 below) . For each regular expression, it then tabulates all of the letters from words in the dictionary that could fill the gaps in the regular expression that correspond to the gaps in the word and counts them. It then multiplies all of those letter counts by a weighting that increases according to the number of known letters there are in the regular expression. This was done because if you had guessed a word up to the point of "c o u n _", you would rather have the algorithm guess "t" due to words like "counting", "accounting" or "viscount" matching the maximum length regular expression "coun." rather than a letter like "a" simply because typically when you find the letter "n" in the dictionary it is normally followed by "a" and the simple sheer number of n's in the dictionary tips the scales of what letter to guess.
-    
-   Some efforts were made to optimise the weights to use for each number of letters in a regular expression, I'll put them below in another section which provides more detail of the problem solving procedure I undertook (I separated it because it is less critical information).
-    
-    
-    
+`algorithm1` works quite well until the word you need to guess doesn't exist in the training dictionary and you start guessing letters from an increasingly small set of words that fit your regular expression from that dictionary but bear no relation to the word you are trying to guess. A better method would take into account common letter combinations in the English language - let us call this next method `algorithm2` Nevertheless, `algorithm1` is still useful under the conditions: 
+- you have a large number of words that match the length and regular expression of the unknown word 
+- There are still many unknown letters 
+
+The biggest motivation for using this method is relative computational speed
+
+   
+
+
+`algorithm2` first looks at the letters in the unknown word, and produces all possible unique regular expressions that can be made with that word using the known letters in the word. Example:
+
+Word guessed so far: 'l e _ _ _ a ' all possible regular expressions would be:
+
+>      '^le..', '^le.', '.a$', '...a$', '..a$', '^le...a$', 'e...a$', '^le...', 'le...a '
+##### (Might change in future for optimisation)
+
+      
+For each regular expression, it then tabulates all of the letters from words in the dictionary that could fill the gaps in the regular expression that correspond to the gaps in the word and counts them. It then multiplies all of those letter counts by a weighting that increases according to the number of known letters there are in the regular expression. 
+
+This was done because if you had guessed a word up to the point of "c o u n _", you would rather have the algorithm guess "t" due to words like "counting", "accounting" or "viscount" matching the maximum length regular expression "coun." rather than a letter like "a" simply because typically when you find the letter "n" in the dictionary it is normally followed by "a" and the simple sheer number of n's in the dictionary tips the scales of what letter to guess.
+   
+Some efforts were made to optimise the weights to use for each number of letters in a regular expression. These were experimental and unfortunately weren't too successful.
 
     
+### Weighting refinement attempts:
     
-### Weighting:
+When I first implemented my algorithm, there were a few values I needed to arbitrarily pick - or make an educated guess about -  that could be adjusted to bring about an optimal solution. These include the weights for different lengths of regular expression as well as the point of transition between the `algorithm1` and `algorithm2`. I chose to apply the idea of a cost function and gradient descent from a ML / optimisation course.
+
+While minimising computational time was a key objective, maximising overall accuracy of the AI was the primary goal (within reason), therefore the cost function centred around accuracy. 
+
+Cost function: 1 minus the fractional accuracy of 50 games
     
-   When I first implemented my algorithm, I realised that there were a few numbers that I had to quite arbitrarily pick - and actually just made an educated guess about, that could and indeed should be adjusted to bring about an optimal solution. The places where these numbers appear in the code are lines 68 and lines 221-230 - they include not only the weights for different lengths of regular expression, but also the point of transition between the benchmark algorithm provided and the algorithm I devised. I have explored machine learning before, but fairly long ago and not in great detail, so it was not immediately clear to me what standard procedure I could follow to try to optimise the weights, or whether there would be some function in some package that would easily solve it for me. 
+The gradient descent algorithm functioned simply as follows:
+   1. Start with arbitrary set of weights I picked that 'seemed about right' 
+   1. For each weight in weights:
+      1. Adjust value by a small fraction either up or down
+      1. Compute cost function
+      1. Compute gradient between former and latter accuracy
+      1. Adjust weight in direction of increasing accuracy by learning parameter magnitude
+
+The second method, one I called "trees", was planned to be that I generate a very large number of random weights within a reasonable range of what I would expect each weight to fall in, calculate the accuracy of all of those sets of weights, then use an algorithm like a random forest (hence "trees") to predict what the best mapping of weights to accuracy would be.
     
-   In any case, I attempted to implement some of my own functions based off of my current understanding of machine learning. I wanted to adjust the weights to improve accuracy, so clearly my performance measure would be accuracy, and the inputs would be the weights. The algorithm would be a supervised learning task as the data has a label, but I spotted a couple of ways to go about it. To be able to implement both of these, the first task was to create a cost function, which I initially made to be 1 minus the fractional accuracy of 50 games. 
-    
-   The first method, which I called "gradient descent", is indeed based on what I understand of gradient descent. I would start with an arbitrary set of weights I picked that 'seemed about right' iterate across each weight in turn, adjust their value by a small fraction either up or down, then measure the accuracy of that method and pick the direction that resulted in the lower accuracy. There were two ways to do this, either you could look at a weight, see which accuracy is better up or down, and then adjust that weight on the spot; or you could wait until you have passed through the entire list of weights having adjusted them all up and down individually (keeping the others constant), and then made the decision (this is how it is coded currently). The latter clearly assumes that the weightings are significantly codependent.
-    
-   The second method, one I called "trees", was planned to be that I generate a very large number of random weights within a reasonable range of what I would expect each weight to fall in, calculate the accuracy of all of those sets of weights, then use an algorithm like a random forest (hence "trees") to predict what the best mapping of weights to accuracy would be.
-    
-   Unfortunately, the big problem with both of these methods was time. The time to play even a single game was slow because it has to check regular expressions across an entire dictionary of 250000 words several times. I tried to make the function more efficient in two principle ways. The first was simply to not have the function recalculate all of the counts for every regular expression when an incorrect letter was guessed (line 132). This is because if you incorrectly guess a letter, the regular expressions you get from the incomplete word that is returned are identical to the ones you just calculated, you just have to move on to the next most common letter you determined before as your guessed letter. The second way is that I had heard that pandas dataframe slicing was extremely efficient, and hypothesised that a number of regular expressions would frequently reoccur in the English Language. By storing those common regular expressions in a permanent DataFrame in an external file, I could build a table mapping regular expressions to their collections.Counter items that I could read in every time I wanted to run a hangman game. A final small thing I considered to speed up the algorithm was to reduce the proportion of the dictionary I would read through, but ultimately I ran out of time and didn't want to compromise accuracy for speed, especially given the performance metric we seem to be measuring the algorithm by is accuracy alone.
+The big problem with both of these methods was time. I am in the process of figuring out ways to reduce computational complexity now.
+
+Unfortunately for my weights optimisation strategy, for 50 repeats of the hangman game, there was too much variation in the accuracy to perform a rigorous gradient descent. In the end a cost function with 100 repeats and a high learning rate was run to some small success, but did not run through many repeats. It was ultimately hard to tell whether the 'optimised' weights performed better at all.
+
+### Reducing computational complexity
+
+Originally, each time a letter is guessed by the AI, several regular expressions were checked across a dictionary of 250000 words. This was slow. Below are some ways I reduced computational time:
+
+- If a letter is incorrectly guessed, the regular expressions searched through the dictionary and therefore the counts of letters in the matching words have not changed. Therefore, no need to repeat the algorithm, move on to the next most likely letter.
+
+[IDEAS TO BE IMPLEMENTED LATER]
+- After matching the expressions to dictionary words for one guess, the words that match the next regular expressions must be a subset of those previous. By keeping track of the matches from the previous guess, the dictionary of words that needs to be searched can be reduced.
+- Along a similar vein, there will exist regular expressions that form a subset of previous regular expressions even within a guess. By matching the 'largest' regular expressions first and keeping track of which regular expressions are subsets of others, less dictionary searching can be done 
+
+Note, these last two ideas increase the memory required since new arrays are created to keep track of previous words.
+
+[NEED TO EDIT THE BELOW]
+
+### Pandas table of regular regular expressions
+
+I had heard that pandas dataframe slicing was extremely efficient, and hypothesised that a number of regular expressions would frequently reoccur in the English Language. A table mapping regular expressions to their collections.Counter objects could be stored in a permanent DataFrame in an external file and expanded with new regular expressions each time a game is played. In the end, this did not prove worth it (too many regular expressions).
    
-   What was even worse, is that I discovered that for 50 repeats of the hangman game, there was still simply too much variation in the cost method return value to realistically be able to implement well either of these methods. In the end I changed it to 100 repeats, and only ran the gradient descent method with a high learning rate to some small success, but it only had time to go through two full iterations while assuming the weights were not co-dependent. In the end it is hard to tell whether the weights I came up with (and rounded to nicer numbers) are really much better than the ones I started with.
-    
-   This problem of speed was so immovable that I attempted for a time to learn about AWS to run my ML algorithm with more computing power. Unfortunately I don't have much experience working with cloud computing or computer networks so as soon as I started seeing I needed to use unfamilar tools like PuTTY I thought I would rather spend time trying to improve what I had than take the risk of trying to learn something that I may not even be able to learn in time to use (at the time my algorithm was still below 50% accuracy).
 
